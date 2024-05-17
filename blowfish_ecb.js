@@ -1,0 +1,500 @@
+var Blowfish = function(key, mode) {
+
+  this.key = key;
+  this.mode = "ecb";
+
+  this.sBox0  = Blowfish.sBox0.slice();
+  this.sBox1  = Blowfish.sBox1.slice();
+  this.sBox2  = Blowfish.sBox2.slice();
+  this.sBox3  = Blowfish.sBox3.slice();
+  this.pArray = Blowfish.pArray.slice();
+
+  this.generateSubkeys(key);
+};
+
+Blowfish.prototype = {
+
+  sBox0: null,
+  sBox1: null,
+  sBox2: null,
+  sBox3: null,
+  pArray: null,
+  key: null,
+  mode: "ecb",
+  keyStr: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=",
+  encrypt: function(string) {
+    if (this.mode === "ecb") {
+      return this.encryptECB(string);
+    }
+  },
+
+  decrypt: function(string) {
+    if (this.mode === "ecb") {
+      return this.decryptECB(string);
+    }
+  },
+
+
+  encryptECB: function(string) {
+    string = this.utf8Decode(string);
+    var blocks = Math.ceil(string.length/8);
+
+    var encryptedString = "";
+    for (var i = 0; i < blocks; i++) {
+      var block = string.substr(i * 8, 8);
+      if (block.length < 8) {
+        var count = 8 - block.length;
+        while (0 < count--) {
+          block += "\0";
+        }
+      }
+
+      var xL, xR;
+      var xLxR  = this.split64by32(block);
+      xL = xLxR[0];
+      xR = xLxR[1];
+
+      xLxR = this.encipher(xL, xR);
+      xL = xLxR[0];
+      xR = xLxR[1];
+      encryptedString += this.num2block32(xL) + this.num2block32(xR);
+    }
+
+    return encryptedString;
+  },
+
+
+
+
+
+
+
+
+
+
+
+
+  decryptECB: function(string) {
+    var blocks = Math.ceil(string.length/8);
+    var decryptedString = "";
+    for (var i = 0; i < blocks; i++) {
+      var block = string.substr(i * 8, 8);
+      if (block.length < 8) {
+      }
+      var xL, xR, xLxR;
+      xLxR = this.split64by32(block);
+      xL = xLxR[0];
+      xR = xLxR[1];
+      xLxR = this.decipher(xL, xR);
+      xL = xLxR[0];
+      xR = xLxR[1];
+      decryptedString += this.num2block32(xL) + this.num2block32(xR);
+    }
+    decryptedString = this.utf8Encode(decryptedString);
+    return decryptedString;
+  },
+ 
+
+
+
+
+
+
+
+
+
+
+  
+  F: function(xL) {
+    var a = xL >>> 24;
+    var b = xL << 8 >>> 24;
+    var c = xL << 16 >>> 24;
+    var d = xL << 24 >>> 24;
+
+    var res = this.addMod32(this.sBox0[a], this.sBox1[b]);
+    res = this.xor(res, this.sBox2[c]);
+    res = this.addMod32(res, this.sBox3[d]);
+    return res;
+  },
+
+  encipher: function(xL, xR) {
+    var tmp;
+    for (var i = 0; i < 16; i++) {
+      xL = this.xor(xL, this.pArray[i]);
+      xR = this.xor(this.F(xL), xR);
+      tmp = xL;
+      xL = xR;
+      xR = tmp;
+    }
+
+    tmp = xL;
+    xL = xR;
+    xR = tmp;
+
+    xR = this.xor(xR, this.pArray[16]);
+    xL = this.xor(xL, this.pArray[17]);
+
+    return [xL, xR];
+  },
+
+  decipher: function(xL, xR) {
+    var tmp;
+
+    xL = this.xor(xL, this.pArray[17]);
+    xR = this.xor(xR, this.pArray[16]);
+
+    tmp = xL;
+    xL = xR;
+    xR = tmp;
+
+    for (var i = 15; i >= 0; i--) {
+      tmp = xL;
+      xL = xR;
+      xR = tmp;
+      xR = this.xor(this.F(xL), xR);
+      xL = this.xor(xL, this.pArray[i]);
+    }
+
+    return [xL, xR];
+  },
+
+  generateSubkeys: function(key) {
+    var data = 0;
+    var k = 0;
+    var i, j;
+
+    for (i = 0; i < 18; i++) {
+      for (j = 4; j > 0; j--) {
+        data = this.fixNegative(data << 8 | key.charCodeAt(k));
+        k = (k + 1) % key.length;
+      }
+      this.pArray[i] = this.xor(this.pArray[i], data);
+      data = 0;
+    }
+
+    var block64 = [0, 0];
+    for (i = 0; i < 18; i += 2) {
+      block64 = this.encipher(block64[0], block64[1]);
+      this.pArray[i] = block64[0];
+      this.pArray[i + 1] = block64[1];
+    }
+
+    for (i = 0; i < 256; i += 2) {
+      block64 = this.encipher(block64[0], block64[1]);
+      this.sBox0[i] = block64[0];
+      this.sBox0[i + 1] = block64[1];
+    }
+
+    for (i = 0; i < 256; i += 2) {
+      block64 = this.encipher(block64[0], block64[1]);
+      this.sBox1[i] = block64[0];
+      this.sBox1[i + 1] = block64[1];
+    }
+
+    for (i = 0; i < 256; i += 2) {
+      block64 = this.encipher(block64[0], block64[1]);
+      this.sBox2[i] = block64[0];
+      this.sBox2[i + 1] = block64[1];
+    }
+
+    for (i = 0; i < 256; i += 2) {
+      block64 = this.encipher(block64[0], block64[1]);
+      this.sBox3[i] = block64[0];
+      this.sBox3[i + 1] = block64[1];
+    }
+
+  },
+
+  block32toNum: function(block32) {
+    return this.fixNegative(
+      block32.charCodeAt(0) << 24 |
+      block32.charCodeAt(1) << 16 |
+      block32.charCodeAt(2) << 8 |
+      block32.charCodeAt(3)
+      );
+  },
+
+  num2block32: function(num) {
+    return String.fromCharCode(num >>> 24) +
+    String.fromCharCode(num << 8 >>> 24) +
+    String.fromCharCode(num << 16 >>> 24) +
+    String.fromCharCode(num << 24 >>> 24);
+  },
+
+  xor: function(a, b) {
+    return this.fixNegative(a ^ b);
+  },
+
+  addMod32: function(a, b) {
+    return this.fixNegative((a + b) | 0);  // | 0 приводит к 32битному значению
+  },
+
+  fixNegative: function(number) {
+    return number >>> 0;
+  },
+
+  split64by32: function (block64) {
+    var xL = block64.substring(0, 4);
+    var xR = block64.substring(4, 8);
+
+    return [this.block32toNum(xL) , this.block32toNum(xR)];
+  },
+
+  utf8Decode: function(string) {
+    var utftext = "";
+    for (var n = 0; n < string.length; n++) {
+      var c = string.charCodeAt(n);
+      if (c < 128) {
+        utftext += String.fromCharCode(c);
+      } else if (c > 127 && c < 2048) {
+        utftext += String.fromCharCode(c >> 6 | 192);
+        utftext += String.fromCharCode(c & 63 | 128);
+      } else {
+        utftext += String.fromCharCode(c >> 12 | 224);
+        utftext += String.fromCharCode(c >> 6 & 63 | 128);
+        utftext += String.fromCharCode(c & 63 | 128);
+      }
+    }
+    return utftext;
+  },
+
+  utf8Encode: function (utftext) {
+    var string = "";
+    var i = 0;
+    var c = 0;
+    var c1 = 0;
+    var c2 = 0;
+
+    while ( i < utftext.length ) {
+
+      c = utftext.charCodeAt(i);
+
+      if (c < 128) {
+        string += String.fromCharCode(c);
+        i++;
+      } else if((c > 191) && (c < 224)) {
+        c1 = utftext.charCodeAt(i+1);
+        string += String.fromCharCode(((c & 31) << 6) | (c1 & 63));
+        i += 2;
+      } else {
+        c1 = utftext.charCodeAt(i+1);
+        c2 = utftext.charCodeAt(i+2);
+        string += String.fromCharCode(((c & 15) << 12) | ((c1 & 63) << 6) | (c2 & 63));
+        i += 3;
+      }
+
+    }
+
+    return string;
+  },
+
+  base64Encode : function (input) {
+    var output = "";
+    var chr1, chr2, chr3, enc1, enc2, enc3, enc4;
+    var i = 0;
+
+
+    while (i < input.length) {
+      chr1 = input.charCodeAt(i++);
+      chr2 = input.charCodeAt(i++);
+      chr3 = input.charCodeAt(i++);
+
+      enc1 = chr1 >> 2;
+      enc2 = ((chr1 & 3) << 4) | (chr2 >> 4);
+      enc3 = ((chr2 & 15) << 2) | (chr3 >> 6);
+      enc4 = chr3 & 63;
+
+      if (isNaN(chr2)) {
+        enc3 = enc4 = 64;
+      } else if (isNaN(chr3)) {
+        enc4 = 64;
+      }
+
+      output = output +
+        this.keyStr.charAt(enc1) + this.keyStr.charAt(enc2) +
+        this.keyStr.charAt(enc3) + this.keyStr.charAt(enc4);
+    }
+
+    return output;
+  },
+
+  base64Decode : function (input) {
+    var output = "";
+    var chr1, chr2, chr3;
+    var enc1, enc2, enc3, enc4;
+    var i = 0;
+
+    input = input.replace(/[^A-Za-z0-9\+\/\=]/g, "");
+
+    while (i < input.length) {
+
+      enc1 = this.keyStr.indexOf(input.charAt(i++));
+      enc2 = this.keyStr.indexOf(input.charAt(i++));
+      enc3 = this.keyStr.indexOf(input.charAt(i++));
+      enc4 = this.keyStr.indexOf(input.charAt(i++));
+
+      chr1 = (enc1 << 2) | (enc2 >> 4);
+      chr2 = ((enc2 & 15) << 4) | (enc3 >> 2);
+      chr3 = ((enc3 & 3) << 6) | enc4;
+
+      output = output + String.fromCharCode(chr1);
+
+      if (enc3 != 64) {
+        output = output + String.fromCharCode(chr2);
+      }
+      if (enc4 != 64) {
+        output = output + String.fromCharCode(chr3);
+      }
+
+    }
+
+
+    return output;
+  },
+
+  trimZeros: function(input) {
+    return input.replace(/\0+$/g, "");
+  }
+}
+
+Blowfish.pArray = [
+    0x12345678, 0x23456789, 0x34567890, 0x45678901, 0x56789012, 0x67890123,
+    0x78901234, 0x89012345, 0x90123456, 0xa0123456, 0xb1234567, 0xc2345678,
+    0xd3456789, 0xe4567890, 0xf5678901, 0x01234567, 0x12345678, 0x23456789
+];
+  
+Blowfish.sBox0 = [  0x1a2b3c4d, 0x5e6f7a8b, 0x9c0d1e2f, 0x3b4c5d6e, 0x7f8e9a0b, 0xacbdcedf,
+  0x985BDA65, 0xB78C8809, 0x637FB7CC, 0x6AAD5D1D, 0xFD38E59E, 0x91D1592A, 0x903DC8AA, 0x3F259297, 
+  0x3DE31020, 0x7CAEE314, 0xA1A6AD5D, 0x3B5B3B30, 0xFDA7E94B, 0xBAD6C331, 0xCD7DC266, 0x43FB8C93,
+  0x344DE8CC, 0x70185F77, 0xDC2EAA9B, 0x9D1B81F8, 0xDBBBA03B, 0x3299D21A, 0xECF0022C, 0x3ED2CD73,
+  0x615379EB, 0x55FE324F, 0x05DD0EAB, 0xF0D329A8, 0xEF79D865, 0xCEFBC07B, 0x0D472A72, 0x4DE56332,
+  0xD1635958, 0x25749476, 0x9C168780, 0x493CD8E9, 0xCB847893, 0x01B0C95A, 0xF2848F3B, 0xA4414371,
+  0x74A742F4, 0x6803A320, 0xC455C7DB, 0xE289FD62, 0x671CEB91, 0x8D2FDFDB, 0xF6C8F875, 0x517E09EC,
+  0x329B9F67, 0xB8246E83, 0x707AFCE6, 0xC83904EF, 0x6FA8BA3E, 0xA4AA69E1, 0x0C548FED, 0x03419A13,
+  0x09AE212F, 0xC3FB3E72, 0x47D141C2, 0xEC564526, 0x7ACFD161, 0xA0B80D7F, 0x5337E4B6, 0x728EDFE0,
+  0xF51A3A2C, 0xD6E7C92D, 0xE46A5D8C, 0xC5C63B1C, 0x738B5B96, 0xFE34D457, 0x959785C3, 0xF0FC81CF,
+  0xF1230430, 0x2E1EC1AF, 0xE061D0CB, 0xAF521281, 0x806CA1E8, 0x8686AB5A, 0x38B9DEAF, 0x59811B4B,
+  0xC147D90E, 0x9866DDF0, 0x325B42E1, 0x8CC0BE64, 0xE21BBD11, 0x861CF27C, 0x1B41D007, 0x3C736EF2,
+  0x011D7C9A, 0x3716C53A, 0x01A2AC86, 0x6E610C17, 0xD4BE6D9C, 0xC884288A, 0xAE077CF9, 0x21051F26,
+  0x3F7FF920, 0x40CCDBC4, 0x956D1AC6, 0x8D7743EC, 0x806F62AB, 0xDF1C5E09, 0x91765FCF, 0xDC3596F5,
+  0x96EABA1D, 0x001356B3, 0xA5B1F0CB, 0x59AF7B90, 0x4B701E8B, 0xFD91DA9A, 0xD7B99809, 0x1241405E,
+  0xB25855CE, 0x47BFA230, 0x482A24FD, 0x5E08835F, 0x2FB21656, 0x934A1436, 0xA22754B6, 0xCE55D07A,
+  0x44B07641, 0x886995DB, 0x75A04E1B, 0xBA2FBF93, 0xE6FC5120, 0x82AA53DB, 0xFCFC9FE7, 0x417D6156,
+  0xB714AE00, 0x96275956, 0xE73F78EA, 0xF8FD17BB, 0x8AE1E99D, 0x2D8DAB2F, 0x161FCC51, 0x3BE02276,
+  0xD7A2C9DD, 0xBE075C8A, 0x92417F62, 0x4D8444C1, 0x83A7DAB4, 0x93E5DDC6, 0x0EE38922, 0x4ACDF054,
+  0xDED9F22F, 0x2C554576, 0xC6E21F55, 0x78EC52A3, 0xD007F70C, 0x2C03B03C, 0x3C9A821F, 0xF0B367E1,
+  0xA0E2B251, 0x2D5265DE, 0xE3C3A3BA, 0xC71AF058, 0xF96F1D43, 0x11BCBC6A, 0x990452D3, 0x8279F2A3,
+  0x072E59E6, 0xFA228639, 0x55D41FC8, 0xD5F855FF, 0x217804FA, 0xA4CB5F15, 0x52678195, 0xC70B3EDE,
+  0x39A18BCD, 0xEFE20F34, 0xA10F5FDB, 0xB8482EED, 0x6FCD987A, 0x8EE12E6E, 0xF5694BD4, 0x68788FA0,
+  0xF681C87A, 0x4A2D389C, 0x0DDA5320, 0x76044359, 0xFB829C3D, 0x7788D9E1, 0x79DB7B12, 0x0807FC97,
+  0x11D03880, 0x7A42E01C, 0x3B49986D, 0x9D4A89BF, 0x1588EC31, 0xFC506CC6, 0x9EA1F408, 0x73AD49D0,
+  0xBE672EF8, 0x99778DC0, 0xF7437751, 0x89334BC8, 0x62ED93C8, 0x65F8000E, 0xA18F2931, 0x6B322E2B,
+  0xFFB08764, 0xF22E7968, 0x4887090B, 0x6C1E1A63, 0x26FFC900, 0x5A74546B, 0x0F7F3D08, 0x7324E2B5,
+  0x6FE3AE75, 0xCA4CC204, 0xBAE73A02, 0x9F528491, 0xB536E08A, 0x0B90914A, 0x3FF35BD9, 0x3E406CB3,
+  0xFA4BA68B, 0x8615501C, 0xA0A718F7, 0x38327174, 0xEA200B35, 0x6AAA3D32, 0x7C4CF5CE, 0x2638F3C5,
+  0xC42312E9, 0xF61E7C41, 0xA6884183, 0xF94DD6BD, 0xF0AD1B05, 0x53084BD2, 0x0575AC7A, 0xDDB96DD9,
+  0x3EC2847F, 0x091549A2, 0x8BD60975, 0x03A3A37F, 0x293EF71E, 0x7DB8A47F, 0x2917892A, 0x6866CD0E,
+  0x2553F262, 0x3435199B, 0x08E62F35, 0x9D63AB67, 0x55956377, 0x1992F867, 0x20419FD3, 0x75D3AB8B,
+  0x69FF11FB, 0xDC5892AC, 0x088C8A38, 0xE85E04D0, 0xAA4FC659, 0xBEAD8EED, 0x63BB48A1, 0x7DE5A803];
+  
+Blowfish.sBox1 = [  0x3a39ce37, 0xd3faf5cf, 0xabc27737, 0x5ac52d1b, 0x5cb0679e, 0x4fa33742,
+  0x7C0AAE92, 0xC1876875, 0x1F30E35A, 0xBC459D1F, 0x40490B3A, 0x9D4695F2, 0x51B712C1, 0xD26DE344, 
+  0x0A4B1A2F, 0xD172FB5A, 0xCEAE55A5, 0x1DBAB1F5, 0x490C4429, 0x70EA1FEC, 0xA6A462DC, 0xF8E07F73, 
+  0x79793712, 0x1B9D97BA, 0xBCEE9D20, 0xC78D86A0, 0xEDB00C7C, 0x5BFE17AF, 0x2BB27E37, 0x65C1A387, 
+  0x582C1EA9, 0x224E1013, 0x1F1337DC, 0x88D6C870, 0x384395C3, 0x06013068, 0x589E9E4D, 0xDF765518, 
+  0xA2EE2C6E, 0xD747B133, 0x527C2564, 0x26DCEEFC, 0x4DEC36B6, 0xF31D4D38, 0xFDEF3F38, 0xB020F10C, 
+  0x76294614, 0x0832DC8D, 0x76255EBB, 0xDA3F69E0, 0x281D1A80, 0x736096AF, 0xF1BE05AA, 0xED539CD3, 
+  0x7C61F1B4, 0xDE2CBFFF, 0xB8675539, 0x5273A71A, 0xB3B25846, 0x61408821, 0x087B6801, 0x93F73D12, 
+  0xFA6174B3, 0x7A4F8FC8, 0xC1F0EE79, 0xEEFCE573, 0xB087DF2B, 0x53247614, 0x70F28B32, 0x651DE91B, 
+  0x556F4363, 0xDE2AABBC, 0xC3674BB9, 0xE35F6F18, 0x28849991, 0x7F4BCCA3, 0x387D31BD, 0xEA73BF1F, 
+  0x28C0523C, 0xE581D27C, 0x9EB1C796, 0xD15BF1A1, 0xC4095AC2, 0x10DAEEFD, 0x51A76A5E, 0x3C865F34, 
+  0xFDC20C47, 0x50FACCEC, 0x2CF39162, 0x9E37E0EB, 0x9A7B1CB4, 0x1D765632, 0x44823FE7, 0xF39C983F, 
+  0x25B07D54, 0xC39586F6, 0x055302D1, 0xB8DFF393, 0x2B6A647A, 0x574E0B68, 0x76898606, 0x4CBC7AE0, 
+  0x24F1A74F, 0xCA28A3E5, 0xC2667B28, 0x32792C93, 0xBF3CA9DB, 0xF59A2878, 0x844726F8, 0x29F27E92, 
+  0x2D551B4D, 0x7D5D3AE4, 0x08D8B3D7, 0x2182A878, 0x429C24EA, 0xA643DBB1, 0x76BFD7B5, 0xF5B67E8E, 
+  0x43F35225, 0x0865E646, 0x2DB2B034, 0x8C0069A0, 0x245D4D1B, 0x321340B8, 0xDB353E60, 0x3D3CB5B9,
+  0x22C2397D, 0xE90CD592, 0x7E467E2D, 0x06015C90, 0x57DBD9F1, 0x53C8CC26, 0x3E154EF3, 0x0BCF2215,
+  0x2F1F66E6, 0xC0BF2273, 0x532A32D6, 0x602481E0, 0x23C84271, 0x1554DC37, 0x8D23CB5F, 0x5BB29517,
+  0x6D9F7A22, 0x328A0014, 0x728116B1, 0x8F81E0C0, 0xF07D504B, 0x036565F4, 0x765CD085, 0x10E47BF5,
+  0x0C5E6D00, 0xBE80A24B, 0xDBC94587, 0x32B65C4B, 0x8752C651, 0x420709F9, 0xAE2A6751, 0xBCCEA3C3,
+  0x198B0309, 0x4B856557, 0xB70E9FDE, 0x08F8E1ED, 0xEFA87E19, 0xE47BED1F, 0x277FA51E, 0xFB20700A,
+  0xB61ADCDD, 0xB8565373, 0xBF94DA69, 0xD3B927C0, 0xA31236F4, 0xBC2E06A6, 0xA7495BBC, 0x5CB9F199,
+  0x66EDE765, 0x493F8746, 0x18738B75, 0x8C9B9650, 0xA9C32A5C, 0x60736C86, 0xCDA45DBC, 0xAD69906C,
+  0xAEC83520, 0x09F0728D, 0x3427BA6D, 0x6261D261, 0xCB19594C, 0xC8DE9C66, 0x74EA68D0, 0x7BE665FD,
+  0xA99A5A41, 0xD658C526, 0x97ABCE64, 0xF294D372, 0xB73B3FEA, 0x95BDD9A0, 0xBBD56264, 0x45392F91,
+  0x0763ABAF, 0xB9C8B127, 0x1D081BFC, 0x7F7C2F69, 0x94457CC8, 0xA77A18C4, 0xF39908DF, 0xEF55BC2F,
+  0x6236AA5F, 0xA9DF280F, 0xEA4A5EE2, 0x7B6DD712, 0xDD64F44B, 0xD260D9A9, 0xD2512912, 0x29CC602C,
+  0x1F2064DE, 0xF0A23BFD, 0xBB2F0549, 0xC703856A, 0x36F72E26, 0x728F15F6, 0x92DBBB41, 0x6489F9AA,
+  0xEFC5333D, 0x554DD588, 0x0C3CF852, 0x6B4E4756, 0x91EE0F16, 0xFA812939, 0x26352DF2, 0x19419CC0,
+  0x5ECE7D28, 0x33D58705, 0xB44132BF, 0xE19207C2, 0x524CE393, 0xF4BF726F, 0xF4E67480, 0xF57829F7,
+  0xD1FA4CA7, 0x859F6155, 0x318BF3AE, 0xDBB17DA9, 0xF8E4DF32, 0xEF9F00E8, 0xE45878C6, 0x666FAFF7,
+  0x686A8140, 0xB783001E, 0x71906A98, 0x5810DACB, 0x0E0FAA32, 0xD1FE0A4E, 0x55895050, 0x238DEC57,
+  0x4D1FC9C2, 0x8B04D6FC, 0x2242DD9C, 0x21271684, 0x056B7649, 0xED52D0FC, 0x1DA2C9FC, 0x90024673];
+  
+Blowfish.sBox2 = [
+  0x8028C720, 0x185F3A88, 0x575F9D20, 0xB7B57A2C, 0xB2BD1631, 0x73AB2C98, 0xDFCD736F, 0x828645ED, 
+  0x327B133B, 0xD16C060B, 0x08CE1492, 0xF9DEBAB5, 0x026F5AA4, 0xE99290B4, 0x445B8FB5, 0x8AE04818,
+  0xCFF8EAF9, 0x00FEDD3F, 0xBE59A2F6, 0x493E16F0, 0x03F266B0, 0xFA481A55, 0x34BF9872, 0x01CB8850,
+  0x204E5897, 0x286AF2E1, 0x4355404E, 0xDC3C1209, 0x6CB65B05, 0xEB818A23, 0xF1FAB6F9, 0xACEAAD82,
+  0x90316D97, 0x4AC9AD5D, 0xAAC9D9B5, 0x186816F2, 0x31C01CDF, 0x0C9DF506, 0xB384D4E4, 0x8DA04AD6,
+  0x6A7EE080, 0x0EA57CDE, 0x606848EF, 0x8A833E7C, 0xF0FC760D, 0x73A12B33, 0xD8045F4B, 0x0C3F4533,
+  0xA04C8516, 0x38336DA6, 0xB3F72565, 0xFF4C650E, 0x94ACB370, 0xBB8C0946, 0x712993D8, 0x5A2C899E,
+  0x7070928C, 0xA9BDEB15, 0xBAE6DF00, 0xAF09BA30, 0x43BCBD95, 0xE17BF47C, 0x07D15E6D, 0xE4F8620D,
+  0x6C9F860A, 0xA4B8AA40, 0x90D776F1, 0x15CE4776, 0xEB7969FC, 0xBE2A67BB, 0x91847CD3, 0xDBE2A352,
+  0x2D9FE28D, 0x6C92C7C7, 0x666BD50F, 0x46F2B603, 0x4C73E559, 0xF092AE3E, 0xC77CF9C2, 0xC9AF129D,
+  0x30DBEEEF, 0xAD1344B2, 0x93E7CCA9, 0xC5437057, 0xA7FDDA68, 0x33BA1300, 0x1D2E87A3, 0x0E6BAF65,
+  0x6C619CAF, 0x56F7FF86, 0xDF58F827, 0xDEB1E579, 0x7303066C, 0x65F06F96, 0x87B71248, 0xEF5D4F66,
+  0x66C8E391, 0xBFD186EB, 0xBBADAFA4, 0x9DC840ED, 0xEB47FF67, 0xBF4EBF0C, 0xE4A8F7F3, 0x038728B0,
+  0x9A923ED5, 0xC8AC723A, 0x1CB809F1, 0xDA4BE3D7, 0x5CEBA7A0, 0x002E04E6, 0xAD89D1A5, 0x41F98D37,
+  0xDD4A5999, 0x6C559000, 0x31D127C5, 0x551986DF, 0xB7B217AA, 0x28A45918, 0x270E00CB, 0x2E136BCC,
+  0x6743722A, 0x186E9061, 0xF7AD615C, 0x580775FB, 0xA19CA65D, 0x36FA6F18, 0x3AB1A822, 0x653374C4,
+  0x26E0C14A, 0x7DABA572, 0x29DF4A11, 0x9C1275F3, 0x2F36AE17, 0x1402F4D0, 0x2745A457, 0xCE36D074,
+  0xEC5B5BC9, 0x2557BCDF, 0xD0DB7EB4, 0x4DCB42D6, 0x4A739A62, 0x023618DB, 0x7CB5BD79, 0xAF6BFC43,
+  0xFD4234E2, 0x44F839E0, 0xD42D87B8, 0x75BF184C, 0x7CD91330, 0x917AD69A, 0x072BF547, 0x92C27691,
+  0x5CC0099D, 0xA6E06218, 0x651F0716, 0xF35F7A22, 0x72A303DD, 0x3C181C44, 0x3CE81C38, 0x888E7996,
+  0x39C8F93A, 0xB5948F02, 0x7F114768, 0xCDE0D9F3, 0x202C5379, 0xE42C1488, 0x3BFC3301, 0xA7C9C5FD,
+  0xC8EA03DB, 0x151B3943, 0x15FFE9D8, 0x52E69039, 0x7067F355, 0x1CBB54FF, 0x69E0AE13, 0x2C897606,
+  0xAF75919D, 0x2CB95ED4, 0xB19DC85B, 0xBAB70E98, 0xA104C940, 0x6207BA32, 0x54904B12, 0x5DD9BF14,
+  0x8DDFD8AD, 0xCBE5F074, 0x8B5724D2, 0xC3CE0F90, 0xB9261C80, 0xEF65A933, 0x9851BF68, 0x0392897D,
+  0xE2E129BA, 0xA487A292, 0x097880F0, 0xE6595F92, 0xBD170C1F, 0x22F2568D, 0x9C2A1458, 0x4A30E250,
+  0xE77BA26A, 0x0B24CA07, 0x48E739F3, 0x56270B16, 0x96500106, 0xEBAE45F6, 0xEACF2F46, 0x81CD60FD,
+  0x5243968F, 0x27BA2F7F, 0x2D98AF2F, 0xFC5E9C75, 0x20BB8D50, 0x8B714763, 0xD8CC9B15, 0xC6E07449,
+  0x33E7C431, 0x7FA7F193, 0x1A40D287, 0x729832AA, 0x99F135DC, 0x6DF64412, 0xB5398E1D, 0xCEE89D43,
+  0xAA1C1933, 0x5B6A3029, 0xC7E54A8F, 0x07212E94, 0x75CC859D, 0x8BB36F11, 0x0B4347EF, 0x466DA391,
+  0xED108BCC, 0x04755E86, 0x67A8A012, 0x88D45C4A, 0xF8264DE8, 0xCD969932, 0x4C874210, 0x7D56E410,
+  0x84760E78, 0xE33C5F5F, 0xC67C07D7, 0xABA1713D, 0xAD112DCF, 0x65D509A2, 0x2B7EAD23, 0xA2E5835F,
+  0x30A9818F, 0x324F2461, 0xF29267B5, 0x12F75988, 0x316F83D2, 0x49363341, 0xCAD78BBB, 0x5F36C61D];
+  
+Blowfish.sBox3 = [  
+  0xB1815C56, 0x7A13D14A, 0xED5D1CBB, 0xA76739C1, 0x29FEC41B, 0x9C47681F, 0x21388453, 0xE67DFEDD, 
+  0x5D74B877, 0xAA877173, 0x9C50951E, 0x8A1B4063, 0x9B814A62, 0xA5905AE1, 0x75EA46EC, 0xB13CC8E5, 
+  0xEB0B6DA5, 0x45F13780, 0x5C4A9843, 0xBFF1F4EF, 0xCBE66BAF, 0x227E11CC, 0x490EB06E, 0xFE4E30BE, 
+  0x749F9016, 0x04EA9F70, 0x9B70884D, 0xC3D6FBFF, 0xCA8D1FBA, 0xB887C3A3, 0x8063C93E, 0xF80647C1, 
+  0xBDEE811C, 0x8DBA72E1, 0xAE1A1863, 0xF23E1A11, 0x18337D26, 0x6197CC2C, 0x968462E5, 0x166D84E7, 
+  0xF644C804, 0x12B5D4FC, 0xF8DBB062, 0xC8CDCEDF, 0xBB454C16, 0xE1D00BB3, 0x27101991, 0xE40457A1, 
+  0x2BA16B2F, 0x2B9AE3B5, 0xCC1EBF19, 0x24C0D123, 0xED091138, 0xD9CDF9F1, 0x13B4061B, 0xC303E7DA, 
+  0x4C126514, 0x87A0681E, 0x64369E4E, 0x20E5341F, 0xECA525D2, 0x945C7F29, 0x09FFFDAA, 0x9FDF465E, 
+  0x5F9B2706, 0x93EE0C60, 0x1C970F91, 0xDEF91ABE, 0x59B12AF6, 0x30345316, 0xA4B0B2FA, 0xAB359468, 
+  0xC039A874, 0x3763DE19, 0xFFA139F4, 0x50E2A7E9, 0xDCEC8D7C, 0x410B4668, 0xC7F0E38B, 0x77196D13, 
+  0xAA710187, 0x36424290, 0xEF35542A, 0xF7309045, 0xD9476D50, 0x7059A079, 0xB5491D7B, 0x5F361E16, 
+  0x1A0F55B7, 0x866380E1, 0x5FA62E19, 0x680D2D24, 0x4BC20C4D, 0xFC4653F8, 0x3ABB3F19, 0x99C07D68, 
+  0x5DA78750, 0x2D82018F, 0xE7AE7BAE, 0x73AC6C70, 0x0E922397, 0xA0AE0D76, 0xC56FB586, 0xE17BA614, 
+  0x602C8EA0, 0xE79B2512, 0x5143C279, 0xDFA8E3AB, 0xC58EAD40, 0xAACDAC98, 0x4A1B5D28, 0x20B48514, 
+  0x13C963A6, 0x2771CDE2, 0xE510C314, 0xF0CCBA7B, 0x8FE8AF6A, 0x682D58B5, 0x7B867145, 0x61BFAE66, 
+  0xEA4B94F1, 0x791953F7, 0xCC242AD8, 0x5C71A63A, 0x11D8D961, 0x1F4CCC5E, 0x688C0AB3, 0x687457F6, 
+  0x33C496D3, 0xC377AB2E, 0xA3EBEC5F, 0xF999A0F0, 0x0D933D4D, 0x0163864B, 0x36B50FD7, 0xA06A9C1D, 
+  0x004F5CC5, 0xCA065B10, 0xE3D1BB46, 0xA108DC66, 0xD0085371, 0xD044DD20, 0x8D765592, 0xEEC81ED3, 
+  0xEA79E6CE, 0x69D5CB03, 0xE58E9A3D, 0x628F0731, 0xDFB6DF51, 0xEFE4E7BB, 0x9D212FBF, 0xA188C143, 
+  0x7988F5FE, 0x38BFC2C6, 0xAE7FDF34, 0xF6CA520C, 0x330CF056, 0xE7B08636, 0x2FB49AB7, 0xE4E43A19, 
+  0xDC755377, 0x4B0922F3, 0xE65D4318, 0x5AB1DA15, 0xBE80BB98, 0x7B572A86, 0x6D978C03, 0x4F02F45B, 
+  0x6788D1C8, 0x8C63AA05, 0x35CADB55, 0x7AD20641, 0x12194EFE, 0x699E9C7D, 0x666209A1, 0x42B5CAD6,
+  0xC3573328, 0x89752BA2, 0xBDDA0285, 0xC73AB60A, 0xCCD4AA0C, 0xF84FACF3, 0x995D277E, 0xA48502FE,
+  0xA1BB03CA, 0xC022A4FB, 0x402A3F41, 0xAF8CE6D3, 0xF61B2182, 0x5A0AD680, 0x6DBFFB6D, 0x13EDC257,
+  0xFCCC1C75, 0x1428887C, 0x4704ED28, 0x5FB8D377, 0x8864810E, 0x50975F62, 0xFE2A8274, 0xE0304C83,
+  0x66190FCE, 0x68CE026B, 0xD5CCDBE5, 0x74C448F5, 0x44B0E36C, 0x3744BA3C, 0x3B31821F, 0x8D0F72C6,
+  0x3B5D34A7, 0x0B862C1E, 0xDCB267EA, 0x093B74F0, 0x7F474A5E, 0x4EBA9445, 0x4FFB57FD, 0xD384D942,
+  0x5329D1FA, 0x41A34AAF, 0x254FB324, 0x3E4B27D8, 0xE0EED66F, 0xED983740, 0x89C86388, 0x630FDF3F,
+  0xCF0B0A7E, 0x72C5D258, 0x6C078E21, 0xA03DB630, 0x6A4D8DF4, 0x9369032B, 0x2912A839, 0xD18035BF,
+  0xBE90C6BA, 0x0642A504, 0x3DBD68D1, 0x888BBCE4, 0xD55CB394, 0xFF73C6C5, 0x349E8D56, 0x0218EBE9,
+  0xD0D32BB8, 0xDC58CD31, 0x727AEDBB, 0x919C02C0, 0x687DC7F9, 0xA61EEF69, 0xDB408D56, 0xCBF5DBFE,
+  0xBAEF6115, 0x0BA0B03B, 0x16A64898, 0x721384C4, 0xE15EE4D9, 0x3CF28345, 0xDDA61FBC, 0xF4440BA8];
