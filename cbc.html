@@ -1,0 +1,66 @@
+<html>
+<head>
+  <title>Blowfish Website</title>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8" />
+  <link rel="stylesheet" href="style.css">
+  <script type="text/javascript" src="http://yandex.st/jquery/1.4.2/jquery.min.js"></script>
+  <script type="text/javascript" src="blowfish_cbc.js"></script>
+</head>
+<body>
+  <h1>Encryption and Decryption with Blowfish algorithm with CBC mode</h1>
+
+  <a href="index.html">Main Page</a>
+
+  <form>
+    <p>Input area</p>
+    <textarea name="input" rows="8" cols="40"></textarea><br/>
+    
+    <p>Key</p>
+    <input type="text" name="key" size="30" />
+    <input type="submit" name="cipher" value="encrypt">
+    <input type="submit" name="decipher" value="decrypt">
+    
+    <p>Output area</p>
+    <textarea name="result" rows="8" cols="40"></textarea>
+  </form>
+
+  <script type="text/javascript">
+    // function to encrypt text
+    $(function() {
+      $('input[name = cipher]').click(function(event) {
+        try {
+          var key = $('input[name = key]').val();           
+          var input = $('textarea[name = input]').val();    
+          var blowfish = new Blowfish(key, "cbc");
+          var result = blowfish.encrypt(input, "hello123");
+          result = blowfish.base64Encode(result);
+
+          $('textarea[name = result]').val(result);
+        } catch(ex) {
+          if (window.console && console.log) {
+            console.log(ex)
+          }
+        }
+        return false;
+      });
+      // function to decrypt text
+      $('input[name = decipher]').click(function() {
+        try {
+          var key = $('input[name = key]').val();
+          var output = $('textarea[name = input]').val();
+          var blowfish = new Blowfish(key, "cbc");
+          output = blowfish.base64Decode(output);
+          var result = blowfish.decrypt(output, "hello123");
+
+          $('textarea[name = result]').val(result);
+        } catch(ex) {
+          if (window.console && console.log) {
+            console.log(ex)
+          }
+        }
+        return false;
+      });
+    });
+  </script>
+</body>
+</html>
