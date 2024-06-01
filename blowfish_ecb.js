@@ -1,4 +1,4 @@
-var Blowfish = function(key, mode) {
+var Blowfish = function(key, mode) { 
 
   this.key = key;
   this.mode = "ecb";
