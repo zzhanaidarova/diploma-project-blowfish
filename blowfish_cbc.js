@@ -1,16 +1,16 @@
 var Blowfish = function(key, mode) {
 
-    this.key = key;
-    this.mode = "cbc";
+  this.key = key;
+  this.mode = "cbc";
   
-    this.sBox0  = Blowfish.sBox0.slice();
-    this.sBox1  = Blowfish.sBox1.slice();
-    this.sBox2  = Blowfish.sBox2.slice();
-    this.sBox3  = Blowfish.sBox3.slice();
-    this.pArray = Blowfish.pArray.slice();
+  this.sBox0  = Blowfish.sBox0.slice();
+  this.sBox1  = Blowfish.sBox1.slice();
+  this.sBox2  = Blowfish.sBox2.slice();
+  this.sBox3  = Blowfish.sBox3.slice();
+  this.pArray = Blowfish.pArray.slice();
   
-    this.generateSubkeys(key);
-  };
+  this.generateSubkeys(key);
+};
   
   Blowfish.prototype = {
 
@@ -21,23 +21,17 @@ var Blowfish = function(key, mode) {
     pArray: null,
     key: null,
     mode: "cbc",
-    iv:  "abc12345",
+    iv:  "hello123",
     keyStr: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=",
-    encrypt: function(string, iv) {
-      if (this.mode === "cbc") {
-        return this.encryptCBC(string, iv);
-      }
-    },
-    decrypt: function(string, iv) {
-      if (this.mode === "cbc") {
-        return this.decryptCBC(string, iv);
-      }
-    },
 
-
-    encryptCBC: function(string, iv) {
+    encrypt: function(string) {
       string = this.utf8Decode(string);
       var blocks = Math.ceil(string.length/8);
+  
+      var ivL, ivR, ivLivR;
+      ivLivR = this.split64by32(iv);
+      ivL = ivLivR[0];
+      ivR = ivLivR[1];
   
       var encryptedString = "";
       for (var i = 0; i < blocks; i++) {
@@ -46,9 +40,7 @@ var Blowfish = function(key, mode) {
           var count = 8 - block.length;
           while (0 < count--) {
             block += "\0";
-          }
-        }
-
+          }}  
         var xL, xR, xLxR;
         xLxR = this.split64by32(block);
         xL = xLxR[0];
@@ -56,54 +48,45 @@ var Blowfish = function(key, mode) {
   
         xL = this.xor(xL, ivL);
         xR = this.xor(xR, ivR);
+  
         xLxR = this.encipher(xL, xR);
         xL = xLxR[0];
         xR = xLxR[1];
+  
         ivL = xL;
         ivR = xR;
         encryptedString += this.num2block32(xL) + this.num2block32(xR);
       }
-
-        var ivL, ivR, ivLivR;
-        ivLivR = this.split64by32(iv);
-        ivL = ivLivR[0];
-        ivR = ivLivR[1];
-  
       return encryptedString;
     },
 
-
-
-   decryptCBC: function(string, iv) { 
-    var blocks = Math.ceil(string.length/8); 
-    var ivL, ivR, ivLtmp, ivRtmp, ivLivR; 
-    ivLivR = this.split64by32(iv);
-    ivL = ivLivR[0];
-    ivR = ivLivR[1]; 
-    var decryptedString = "";
-    for (var i = 0; i < blocks; i++) {
-      var block = string.substr(i * 8, 8);
-      if (block.length < 8) {
+    decrypt: function(string, iv) {
+      var blocks = Math.ceil(string.length/8);
+      var ivL, ivR, ivLtmp, ivRtmp, ivLivR;
+      ivLivR = this.split64by32(iv);
+      ivL = ivLivR[0];
+      ivR = ivLivR[1];
+      var decryptedString = "";
+      for (var i = 0; i < blocks; i++) {
+        var block = string.substr(i * 8, 8);
+        var xL, xR, xLxR;
+        xLxR = this.split64by32(block);
+        xL = xLxR[0];
+        xR = xLxR[1];
+        ivLtmp = xL;
+        ivRtmp = xR;
+        xLxR = this.decipher(xL, xR);
+        xL = xLxR[0];
+        xR = xLxR[1];
+        xL = this.xor(xL, ivL);
+        xR = this.xor(xR, ivR);
+        ivL = ivLtmp;
+        ivR = ivRtmp;
+        decryptedString += this.num2block32(xL) + this.num2block32(xR);
       }
-      var xL, xR, xLxR;
-      xLxR = this.split64by32(block);
-      xL = xLxR[0];
-      xR = xLxR[1];  
-      ivLtmp = xL;
-      ivRtmp = xR; 
-      xLxR = this.decipher(xL, xR);
-      xL = xLxR[0];
-      xR = xLxR[1]; 
-      xL = this.xor(xL, ivL);
-      xR = this.xor(xR, ivR); 
-      ivL = ivLtmp;
-      ivR = ivRtmp;
-      decryptedString += this.num2block32(xL) + this.num2block32(xR);
-    }
- 
-    decryptedString = this.utf8Encode(decryptedString);
-    return decryptedString;
-  },
+      decryptedString = this.utf8Encode(decryptedString);
+      return decryptedString;
+    },
 
     F: function(xL) {
       var a = xL >>> 24;
@@ -116,7 +99,7 @@ var Blowfish = function(key, mode) {
       res = this.addMod32(res, this.sBox3[d]);
       return res;
     },
-
+    
     encipher: function(xL, xR) {
       var tmp;
       for (var i = 0; i < 16; i++) {
@@ -136,7 +119,6 @@ var Blowfish = function(key, mode) {
   
       return [xL, xR];
     },
-
     decipher: function(xL, xR) {
       var tmp;
   
@@ -162,47 +144,38 @@ var Blowfish = function(key, mode) {
       var data = 0;
       var k = 0;
       var i, j;
-  
       for (i = 0; i < 18; i++) {
         for (j = 4; j > 0; j--) {
           data = this.fixNegative(data << 8 | key.charCodeAt(k));
-          k = (k + 1) % key.length;
-        }
+          k = (k + 1) % key.length;}
         this.pArray[i] = this.xor(this.pArray[i], data);
-        data = 0;
-      }
-  
+        data = 0;}
+        
       var block64 = [0, 0];
       for (i = 0; i < 18; i += 2) {
         block64 = this.encipher(block64[0], block64[1]);
         this.pArray[i] = block64[0];
-        this.pArray[i + 1] = block64[1];
-      }
+        this.pArray[i + 1] = block64[1];}
   
       for (i = 0; i < 256; i += 2) {
         block64 = this.encipher(block64[0], block64[1]);
         this.sBox0[i] = block64[0];
-        this.sBox0[i + 1] = block64[1];
-      }
+        this.sBox0[i + 1] = block64[1];}
   
       for (i = 0; i < 256; i += 2) {
         block64 = this.encipher(block64[0], block64[1]);
         this.sBox1[i] = block64[0];
-        this.sBox1[i + 1] = block64[1];
-      }
+        this.sBox1[i + 1] = block64[1];}
   
       for (i = 0; i < 256; i += 2) {
         block64 = this.encipher(block64[0], block64[1]);
         this.sBox2[i] = block64[0];
-        this.sBox2[i + 1] = block64[1];
-      }
+        this.sBox2[i + 1] = block64[1];}
   
       for (i = 0; i < 256; i += 2) {
         block64 = this.encipher(block64[0], block64[1]);
         this.sBox3[i] = block64[0];
-        this.sBox3[i + 1] = block64[1];
-      }
-  
+        this.sBox3[i + 1] = block64[1];}
     },
   
 
@@ -228,7 +201,7 @@ var Blowfish = function(key, mode) {
     },
   
     addMod32: function(a, b) {
-      return this.fixNegative((a + b) | 0);  // | 0 приводит к 32битному значению
+      return this.fixNegative((a + b) | 0);
     },
   
     fixNegative: function(number) {
@@ -292,29 +265,27 @@ var Blowfish = function(key, mode) {
   
     base64Encode : function (input) {
       var output = "";
-      var chr1, chr2, chr3, enc1, enc2, enc3, enc4;
+      var char1, char2, char3, enc1, enc2, enc3, enc4;
       var i = 0;
   
   
       while (i < input.length) {
-        chr1 = input.charCodeAt(i++);
-        chr2 = input.charCodeAt(i++);
-        chr3 = input.charCodeAt(i++);
+        char1 = input.charCodeAt(i++);
+        char2 = input.charCodeAt(i++);
+        char3 = input.charCodeAt(i++);
   
-        enc1 = chr1 >> 2;
-        enc2 = ((chr1 & 3) << 4) | (chr2 >> 4);
-        enc3 = ((chr2 & 15) << 2) | (chr3 >> 6);
-        enc4 = chr3 & 63;
+        enc1 = char1 >> 2;
+        enc2 = ((char1 & 3) << 4) | (char2 >> 4);
+        enc3 = ((char2 & 15) << 2) | (char3 >> 6);
+        enc4 = char3 & 63;
   
-        if (isNaN(chr2)) {
+        if (isNaN(char2)) {
           enc3 = enc4 = 64;
-        } else if (isNaN(chr3)) {
+        } else if (isNaN(char3)) {
           enc4 = 64;
         }
   
-        output = output +
-          this.keyStr.charAt(enc1) + this.keyStr.charAt(enc2) +
-          this.keyStr.charAt(enc3) + this.keyStr.charAt(enc4);
+        output = output + this.keyStr.charAt(enc1) + this.keyStr.charAt(enc2) + this.keyStr.charAt(enc3) + this.keyStr.charAt(enc4);
       }
   
       return output;
@@ -322,7 +293,7 @@ var Blowfish = function(key, mode) {
   
     base64Decode : function (input) {
       var output = "";
-      var chr1, chr2, chr3;
+      var char1, char2, char3;
       var enc1, enc2, enc3, enc4;
       var i = 0;
   
@@ -335,21 +306,19 @@ var Blowfish = function(key, mode) {
         enc3 = this.keyStr.indexOf(input.charAt(i++));
         enc4 = this.keyStr.indexOf(input.charAt(i++));
   
-        chr1 = (enc1 << 2) | (enc2 >> 4);
-        chr2 = ((enc2 & 15) << 4) | (enc3 >> 2);
-        chr3 = ((enc3 & 3) << 6) | enc4;
+        char1 = (enc1 << 2) | (enc2 >> 4);
+        char2 = ((enc2 & 15) << 4) | (enc3 >> 2);
+        char3 = ((enc3 & 3) << 6) | enc4;
   
-        output = output + String.fromCharCode(chr1);
+        output = output + String.fromCharCode(char1);
   
         if (enc3 != 64) {
-          output = output + String.fromCharCode(chr2);
+          output = output + String.fromCharCode(char2);
         }
         if (enc4 != 64) {
-          output = output + String.fromCharCode(chr3);
+          output = output + String.fromCharCode(char3);
         }
-  
       }
-  
       return output;
     },
   
@@ -361,8 +330,7 @@ var Blowfish = function(key, mode) {
   Blowfish.pArray = [
     0x12345678, 0x23456789, 0x34567890, 0x45678901, 0x56789012, 0x67890123,
     0x78901234, 0x89012345, 0x90123456, 0xa0123456, 0xb1234567, 0xc2345678,
-    0xd3456789, 0xe4567890, 0xf5678901, 0x01234567, 0x12345678, 0x23456789
-];
+    0xd3456789, 0xe4567890, 0xf5678901, 0x01234567, 0x12345678, 0x23456789];
   
 Blowfish.sBox0 = [  
   0x8D042863, 0xC4A78D9C, 0xAE3010DD, 0x72495937, 0x3C717F25, 0x78CFF096, 0x7ACAABFB, 0x145A18CD, 
