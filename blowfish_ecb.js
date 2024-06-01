@@ -22,20 +22,8 @@ Blowfish.prototype = {
   key: null,
   mode: "ecb",
   keyStr: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=",
+
   encrypt: function(string) {
-    if (this.mode === "ecb") {
-      return this.encryptECB(string);
-    }
-  },
-
-  decrypt: function(string) {
-    if (this.mode === "ecb") {
-      return this.decryptECB(string);
-    }
-  },
-
-
-  encryptECB: function(string) {
     string = this.utf8Decode(string);
     var blocks = Math.ceil(string.length/8);
 
@@ -63,48 +51,29 @@ Blowfish.prototype = {
     return encryptedString;
   },
 
-
-
-
-
-
-
-
-
-
-
-
-  decryptECB: function(string) {
+  decrypt: function(string) {
     var blocks = Math.ceil(string.length/8);
+
     var decryptedString = "";
     for (var i = 0; i < blocks; i++) {
       var block = string.substr(i * 8, 8);
-      if (block.length < 8) {
-      }
       var xL, xR, xLxR;
+
       xLxR = this.split64by32(block);
       xL = xLxR[0];
       xR = xLxR[1];
+
       xLxR = this.decipher(xL, xR);
       xL = xLxR[0];
       xR = xLxR[1];
+
       decryptedString += this.num2block32(xL) + this.num2block32(xR);
     }
+
     decryptedString = this.utf8Encode(decryptedString);
     return decryptedString;
   },
  
-
-
-
-
-
-
-
-
-
-
-  
   F: function(xL) {
     var a = xL >>> 24;
     var b = xL << 8 >>> 24;
@@ -226,7 +195,7 @@ Blowfish.prototype = {
   },
 
   addMod32: function(a, b) {
-    return this.fixNegative((a + b) | 0);  // | 0 приводит к 32битному значению
+    return this.fixNegative((a + b) | 0); 
   },
 
   fixNegative: function(number) {
@@ -360,8 +329,7 @@ Blowfish.prototype = {
 Blowfish.pArray = [
     0x12345678, 0x23456789, 0x34567890, 0x45678901, 0x56789012, 0x67890123,
     0x78901234, 0x89012345, 0x90123456, 0xa0123456, 0xb1234567, 0xc2345678,
-    0xd3456789, 0xe4567890, 0xf5678901, 0x01234567, 0x12345678, 0x23456789
-];
+    0xd3456789, 0xe4567890, 0xf5678901, 0x01234567, 0x12345678, 0x23456789];
   
 Blowfish.sBox0 = [  0x1a2b3c4d, 0x5e6f7a8b, 0x9c0d1e2f, 0x3b4c5d6e, 0x7f8e9a0b, 0xacbdcedf,
   0x985BDA65, 0xB78C8809, 0x637FB7CC, 0x6AAD5D1D, 0xFD38E59E, 0x91D1592A, 0x903DC8AA, 0x3F259297, 
